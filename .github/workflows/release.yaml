@@ -2,7 +2,7 @@ name: Release Auparse
 on:
   push:
     tags:
-      - 'v*'  # Runs only when a new tag is pushed (e.g., v2.6.1, v3.0.0)
+      - 'v*'  # Runs only on new tag push
 
 permissions:
   contents: write
@@ -16,12 +16,12 @@ jobs:
         os: [ linux, darwin ]
         arch: [ amd64, arm64 ]
     env:
-      tag: ${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }}
+      tag: v${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all tags
+          fetch-depth: 0  # Ensure all tags are fetched
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -30,13 +30,13 @@ jobs:
 
       - name: Build
         run: |
-          GOOS="${{ matrix.os }}" GOARCH="${{ matrix.arch }}" go build -o bin/auparse-${{ env.tag }} cmd/auparse/auparse.go 
+          GOOS="${{ matrix.os }}" GOARCH="${{ matrix.arch }}" go build -o bin/auparse-${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }} cmd/auparse/auparse.go 
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: auparse-${{ env.tag }}
-          path: bin/auparse-${{ env.tag }}
+          name: auparse-${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/auparse-${{ github.ref_name }}-${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     name: Release
@@ -53,11 +53,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: bin
+          merge-multiple: true  # Merge all artifacts in one folder
+
+      - name: List downloaded files
+        run: ls -R bin  # Debugging step to verify files
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: bin/auparse-*
+          files: bin/*
           name: 'Release ${{ github.ref_name }}'
           tag_name: '${{ github.ref_name }}'
           generate_release_notes: true
