@@ -1,20 +1,22 @@
 name: Release Auparse
 on:
   push:
-    branches:
-      - 'feature/release'
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
         description: 'Version'
         required: true
         type: string
-        default: '2.5.0'
+        default: '2.6.1'
+
 permissions:
-  contents: read
+  contents: write
+
 jobs:
   build:
-    name: Release
+    name: Build Binaries
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,33 +28,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          tag: 'refs/tags/v${{ inputs.version }}'
+          ref: 'refs/tags/v${{ inputs.version }}'  # Fixed tag reference
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: 1.21.6
+
       - name: Build
         run: |
           GOOS="${{ matrix.os }}" GOARCH="${{ matrix.arch }}" go build -o bin/auparse-${{ env.tag }} cmd/auparse/auparse.go 
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: auparse-${{ env.tag }}
           path: bin/auparse-${{ env.tag }}
+
   release:
     name: Release
     runs-on: ubuntu-latest 
     needs: build
     steps:  
-    - name: Download Artifact
-      uses: actions/download-artifact@v4
-      with:
-        path: bin
-    - name: Release
-      uses: softprops/action-gh-release@v2
-      with:
-        files: bin/auparse-*
-        name: '${{ inputs.version }}'
-        tag_name: '${{ inputs.version }}'
-        generate_release_notes: true
-        token: '${{ secrets.GITHUB_TOKEN }}'
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: bin
+
+      - name: Create Tag (if missing)
+        run: |
+          if ! git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            git tag v${{ inputs.version }}
+            git push origin v${{ inputs.version }}
+          fi
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/auparse-*
+          name: 'Release ${{ inputs.version }}'
+          tag_name: 'v${{ inputs.version }}'
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
